@@ -36,7 +36,7 @@
 
 #define ARCH_TYPE "x86_64"
 #define MEMORY "1073741824"         // default limit on the memory cgroup controller
-#define CPU_SHARES "256"                // default shares limit on cpu cgroup controller
+#define CPU_SHARES "256"            // default shares limit on cpu cgroup controller
 #define PIDS "64"                   // default pids limit on the pid cgroup controller
 #define WEIGHT "10"                 // default weight limit on the block IO cgroup controller
 #define FD_COUNT 64                 // default FD_COUNT
@@ -49,11 +49,11 @@
 /**
  *  Set of CGROUPS-Controllers that must be set
  **/
-#define CGRP_MEMORY_CONTROL "memory"
-#define CGRP_CPU_CONTROL "cpu"
-#define CGRP_CPU_SET_CONTROL "cpuset"
-#define CGRP_PIDS_CONTROL "pids"
-#define CGRP_BLKIO_CONTROL "blkio"
+#define CGRP_MEMORY_CONTROL "memory"       // cgroups[1]
+#define CGRP_CPU_CONTROL "cpu"             // cgroups[2]
+#define CGRP_CPU_SET_CONTROL "cpuset"      // cgroups[3]
+#define CGRP_PIDS_CONTROL "pids"           // cgroups[4]
+#define CGRP_BLKIO_CONTROL "blkio"         // cgroups[0]
 
 /**
  *  Struct to hold configurations related to the child process that 

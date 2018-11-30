@@ -30,18 +30,77 @@ struct cgroup_setting self_to_task = {
  *  ------------------------------------------------------
  **/ 
 struct cgroups_control *cgroups[5] = {
+    // set limit for read and write speed
 	& (struct cgroups_control) {
 		.control = CGRP_BLKIO_CONTROL,
 		.settings = (struct cgroup_setting *[]) {
+			//ADDED (2):
 			& (struct cgroup_setting) {
-				.name = "blkio.weight",
-				.value = "64"
+				.name = "blkio.throttle.read_bps_device",
+				.value = ""   //TODO figure out what default value should be
 			},
+			& (struct cgroup_setting) {
+				.name = "blkio.throttle.write_bps_device",
+				.value = ""   //TODO figure out what default value should be
+			},
+			// End of additions
 			&self_to_task,             // must be added to all the new controls added
 			NULL                       // NULL at the end of the array
 		}
 	},
-	NULL                               // NULL at the end of the array
+    // set limit of memories
+    & (struct cgroups_control) {
+        .control = CGRP_MEMORY_CONTROL,
+        .settings = (struct cgroup_setting *[]) {
+            & (struct cgroup_setting) {
+                .name = "memory.limit_in_bytes",
+                .value = MEMORY
+            },
+            &self_to_task,
+            NULL
+        }
+    },
+    // set cpu shares
+    & (struct cgroups_control) {
+        .control = CGRP_CPU_CONTROL,
+        .settings = (struct cgroup_setting *[]) {
+            & (struct cgroup_setting) {
+                .name = "cpu.shares",
+                .value = CPU_SHARES
+            },
+            &self_to_task,
+            NULL
+        }
+    },
+    // set cpu:0 for tasks
+    & (struct cgroups_control) {
+        .control = CGRP_CPU_SET_CONTROL,
+        .settings = (struct cgroup_setting *[]) {
+            & (struct cgroup_setting) {
+                .name = "cpuset.cpus",
+                .value = "0" //COME BACK
+            },
+            & (struct cgroup_setting) {
+                .name = "cpuset.mems",
+                .value = "0" //Assignment at least one memory node to cpu:0
+            },
+            &self_to_task,
+            NULL
+        }
+    },
+    // set max pids processes to 64
+    & (struct cgroups_control) {
+        .control = CGRP_PIDS_CONTROL,
+        .settings = (struct cgroup_setting *[]) {
+            & (struct cgroup_setting) {
+                    .name = "pids.max",
+                    .value = "64" //COME BACK
+            },
+            &self_to_task,
+            NULL
+        }
+    },
+    // because we have already 5 structs, we will remove NULL at the end of struct array
 };
 
 
@@ -75,7 +134,7 @@ int main(int argc, char **argv)
     pid_t child_pid = 0;
     int last_optind = 0;
     bool found_cflag = false;
-    while ((option = getopt(argc, argv, "c:m:u:")))
+    while ((option = getopt(argc, argv, "H:w:r:M:p:s:C:c:m:u:")))
     {
         if (found_cflag)
             break;
@@ -85,10 +144,11 @@ int main(int argc, char **argv)
         case 'c':
             config.argc = argc - last_optind - 1;
             config.argv = &argv[argc - config.argc];
-            found_cflag = true;
+            printf("Shell is: %s\n",config.argv[0]);
             break;
         case 'm':
             config.mount_dir = optarg;
+            printf("FS mount directory is: %s\n",config.mount_dir);
             break;
         case 'u':
             if (sscanf(optarg, "%d", &config.uid) != 1)
@@ -97,6 +157,44 @@ int main(int argc, char **argv)
                 cleanup_stuff(argv, sockets);
                 return EXIT_FAILURE;
             }
+            printf("=============== Container ================\n");
+            printf("UID is: %d\n",config.uid);
+            break;
+        case 'C':
+            strcpy((cgroups[2]->settings)[0]->value, optarg);
+            printf("CPU share weight is: %s\n",(cgroups[2]->settings)[0]->value);
+            break;
+        case 's':
+            strcpy((cgroups[3]->settings)[0]->value, optarg);
+            printf("CPU core is: %s\n",(cgroups[3]->settings)[0]->value);
+            printf("CPU memory node is: %s\n",(cgroups[3]->settings)[1]->value);
+            break;
+        case 'p':
+            // printf("Max number of process is: %s",optarg);
+            strcpy((cgroups[4]->settings)[0]->value, optarg);
+            printf("Max number of process is: %s\n",(cgroups[4]->settings)[0]->value);
+            break;
+        case 'M':
+            // printf("Max memory usage is: %s",optarg);
+            strcpy((cgroups[1]->settings)[0]->value, optarg);
+            printf("Max memory usage is: %s\n",(cgroups[1]->settings)[0]->value);
+            break;
+        case 'r':
+            // printf("Read speed limit is: %s",optarg);
+            strcpy((cgroups[0]->settings)[0]->value, optarg);
+            printf("Read speed limit is: %s\n",(cgroups[0]->settings)[0]->value);
+            break;
+        case 'w':
+            // printf("Write speed limit is: %s",optarg);
+            strcpy((cgroups[0]->settings)[1]->value, optarg);
+            printf("Write speed limit is: %s\n",(cgroups[0]->settings)[1]->value);
+            break;
+        case 'H':
+            // printf("Hostname is: %s",optarg);
+            config.hostname = optarg;
+            found_cflag = true;
+            printf("Hostname is: %s\n",config.hostname);
+            printf("==========================================\n");
             break;
         default:
             cleanup_stuff(argv, sockets);
@@ -104,7 +202,6 @@ int main(int argc, char **argv)
         }
         last_optind = optind;
     }
-
     if (!config.argc || !config.mount_dir){
         cleanup_stuff(argv, sockets);
         return EXIT_FAILURE;
@@ -165,8 +262,10 @@ int main(int argc, char **argv)
     {
         clean_child_structures(&config, cgroups, NULL);
         cleanup_sockets(sockets);
+        printf("Failed");
         return EXIT_FAILURE;
     }
+    printf("Created control group\n");
 
     /**
      * ------------------------ TODO ------------------------
@@ -179,9 +278,22 @@ int main(int argc, char **argv)
      * HINT: Note that the 'child_function' expects struct of type child_config.
      * ------------------------------------------------------
      **/
-
-        // You code for clone() goes here
-
+    
+    //Allocate stack for child
+	char *stack;
+	char *stack_top;
+	stack = calloc(STACK_SIZE, sizeof(char));
+	if (stack == NULL) {
+		fprintf(stderr, "Failed to create stack for child!\n");
+		clean_child_structures(&config, cgroups, stack);
+        cleanup_sockets(sockets);
+        return EXIT_FAILURE;
+	}
+	stack_top = stack + STACK_SIZE;
+	
+	
+	child_pid = clone(child_function, stack_top, CLONE_NEWNS | CLONE_NEWPID | CLONE_NEWUTS | CLONE_NEWCGROUP | CLONE_NEWIPC | CLONE_NEWNET | SIGCHLD, &config);
+    printf("Cloning child pid\n");
     /**
      *  ------------------------------------------------------
      **/ 
